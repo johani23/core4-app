@@ -1,0 +1,74 @@
+# governance_rules.yaml
+# Core4.AI — Phase 1 Governance Rules (Private Beta)
+
+scenarios:
+
+  over_optimization_risk:
+    id: A
+    description: "Rapid optimization beyond personal baseline"
+    trigger:
+      all:
+        - signal: action_frequency
+          operator: ">"
+          value: "baseline.action_frequency * 2"
+        - signal: time_compression
+          operator: ">"
+          value: 0.6
+        - signal: deviation_score
+          operator: ">"
+          value: 0.7
+    action:
+      type: pause
+      governor_required: false
+      copy_key: pause_non_accusatory
+
+  emotional_decision_loop:
+    id: B
+    description: "Repeated decisions with negative outcomes"
+    trigger:
+      all:
+        - signal: pattern_recurrence
+          operator: ">="
+          value: 3
+        - signal: avg_outcome_score
+          operator: "<"
+          value: -0.4
+        - signal: regret_score
+          operator: ">"
+          value: 0.6
+    action:
+      type: soft_refusal
+      governor_required: true
+      copy_key: refusal_explanatory
+
+  silence_collapse:
+    id: C
+    description: "Sudden silence after high engagement"
+    trigger:
+      all:
+        - signal: prior_intensity
+          operator: ">"
+          value: 0.75
+        - signal: silence_duration_hours
+          operator: ">"
+          value: 72
+    action:
+      type: nudge
+      governor_required: false
+      copy_key: reassurance_only
+
+  governance_escalation:
+    id: D
+    description: "Multiple overlapping risks with resistance"
+    trigger:
+      all:
+        - signal: active_risk_scenarios
+          operator: ">="
+          value: 2
+        - signal: ignored_interventions
+          operator: ">="
+          value: 2
+    action:
+      type: hard_governance
+      governor_required: true
+      copy_key: human_override

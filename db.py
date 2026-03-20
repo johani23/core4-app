@@ -1,24 +1,23 @@
-# ============================================================================
-# 💚 Core4.AI – Database Engine / Session (SQLite + SQLAlchemy)
-# ============================================================================
-
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# SQLite database (Render-safe path)
-SQLALCHEMY_DATABASE_URL = "sqlite:////tmp/core4.db"
+DATABASE_URL = "sqlite:///./core4.db"
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
+    DATABASE_URL,
     connect_args={"check_same_thread": False}
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
 Base = declarative_base()
 
-# Dependency: DB session generator
+
 def get_db():
     db = SessionLocal()
     try:

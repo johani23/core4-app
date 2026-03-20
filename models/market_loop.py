@@ -1,0 +1,79 @@
+# models/market_loop.py
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy.sql import func
+from db import Base  # assuming you have Base in db.py
+
+class MarketLoopCommitment(Base):
+    __tablename__ = "demand_commitments"
+
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_id = Column(String, index=True, nullable=False)
+
+    buyer_id = Column(String, index=True, nullable=True)  # can be null for anon
+    qty = Column(Integer, default=1)
+    intent_type = Column(String, default="buy")  # buy / preorder / subscribe
+
+    weight = Column(Float, default=1.0)          # 0..1
+    credibility_score = Column(Float, default=0.7)  # 0..1
+
+    # optional pricing hint from buyers
+    price_ceiling = Column(Float, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SystemEvent(Base):
+    __tablename__ = "system_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_id = Column(String, index=True, nullable=False)
+
+    event_type = Column(String, index=True, nullable=False)  # COMMITMENT_CREATED / DEMAND_SPIKE / PROPOSAL_CREATED / PROPOSAL_APPLIED
+    strength = Column(Float, default=0.0)
+    trace_id = Column(String, index=True, nullable=False)
+
+    payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class GravityState(Base):
+    __tablename__ = "gravity_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_id = Column(String, index=True, nullable=False, unique=True)
+
+    gi = Column(Float, default=0.0)
+    rho = Column(Float, default=0.0)
+    vn = Column(Float, default=0.0)
+    cc = Column(Float, default=0.0)
+    mode = Column(String, default="GREEN")
+    confidence = Column(Float, default=0.5)
+
+    current_price = Column(Float, default=100.0)  # MVP simplification
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+
+class PricingProposal(Base):
+    __tablename__ = "pricing_proposals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_id = Column(String, index=True, nullable=False)
+
+    current_price = Column(Float, nullable=False)
+    proposed_price = Column(Float, nullable=False)
+    delta_pct = Column(Float, nullable=False)
+
+    confidence = Column(Float, default=0.5)
+    reason = Column(String, default="")
+
+    guardrail_status = Column(String, default="PASS")  # PASS / FAIL
+    guardrail_reason = Column(String, default="")
+
+    status = Column(String, default="PROPOSED")  # PROPOSED / APPLIED / REJECTED
+
+    trace_id = Column(String, index=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

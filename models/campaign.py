@@ -1,4 +1,8 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+# ============================================================================
+# 💚 Core4.AI – Campaign Model (PRODUCTION READY)
+# ============================================================================
+
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, Index
 from sqlalchemy.sql import func
 from db import Base
 
@@ -9,11 +13,10 @@ class Campaign(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # -------------------------------------------------
-    # Relations (ONE of them must exist)
+    # Relations (soft-linked for MVP)
     # -------------------------------------------------
     product_id = Column(
         Integer,
-        ForeignKey("products.id"),
         nullable=True
     )
 
@@ -23,17 +26,72 @@ class Campaign(Base):
     )
 
     # -------------------------------------------------
-    # Campaign execution data
+    # Campaign decision (MERCHANT-OWNED)
     # -------------------------------------------------
-    audience = Column(String(100), nullable=False)
-    influencer = Column(String(100), nullable=False)
+    channel = Column(
+        String(100),
+        nullable=False,
+        doc="Channel chosen by merchant (e.g. Influencer content, Ads, Organic)"
+    )
 
-    recommended_price = Column(Float, nullable=True)
-    ai_success_score = Column(Float, nullable=True)
+    context_note = Column(
+        String(255),
+        nullable=True,
+        doc="Non-binding analytical context at time of decision"
+    )
 
-    status = Column(String(50), default="نشطة")
+    # -------------------------------------------------
+    # Market Data (Needed for Referral Loop UI)
+    # -------------------------------------------------
+
+    slug = Column(
+        String(120),
+        unique=True,
+        index=True,
+        nullable=False   # 🔥 FIXED
+    )
+
+    title = Column(
+        String(255),
+        nullable=False   # 🔥 FIXED
+    )
+
+    retail_price = Column(
+        Float,
+        nullable=True
+    )
+
+    current_price = Column(
+        Float,
+        nullable=True
+    )
+
+    target_buyers = Column(
+        Integer,
+        default=100,
+        nullable=False
+    )
+
+    # -------------------------------------------------
+    # Status & audit
+    # -------------------------------------------------
+
+    status = Column(
+        String(50),
+        default="نشطة",
+        index=True   # 🔥 FIXED
+    )
 
     created_at = Column(
         DateTime(timezone=True),
-        server_default=func.now()
+        server_default=func.now(),
+        nullable=False
+    )
+
+    # -------------------------------------------------
+    # Indexes (performance critical)
+    # -------------------------------------------------
+    __table_args__ = (
+        # ⚡ fast feed queries (active campaigns sorted by newest)
+        Index("ix_campaign_status_created", "status", "created_at"),
     )

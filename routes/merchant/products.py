@@ -1,7 +1,6 @@
 # ============================================================================
 # Core4.AI – Merchant Products API
-# FINAL STABLE VERSION
-# (NO REDIRECTS / NO DUPLICATES / NO NaN / FRONTEND-COMPATIBLE)
+# STABLE VERSION (MIT SEPARATED / NO ENFORCED FINAL PRICE)
 # ============================================================================
 
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
@@ -84,10 +83,12 @@ def create_product(
     return {
         "status": "created",
         "id": product.id,
+        "price": float(product.price),
+        "category": product.category,
     }
 
 # ============================================================================
-# POST — CALCULATE & SAVE MIT (CLEAN + DEDUPLICATED)
+# POST — CALCULATE & SAVE MIT (DEDUPLICATED)
 # ============================================================================
 @router.post("/{product_id}/mit")
 def calculate_and_save_mit(product_id: int, db: Session = Depends(get_db)):
@@ -106,7 +107,7 @@ def calculate_and_save_mit(product_id: int, db: Session = Depends(get_db)):
         2
     )
 
-    # 🔥 Ensure ONE MIT row per product
+    # Ensure ONE MIT row per product
     db.execute(
         text("DELETE FROM product_pricing_mit WHERE product_id = :pid"),
         {"pid": product_id}
@@ -128,8 +129,8 @@ def calculate_and_save_mit(product_id: int, db: Session = Depends(get_db)):
             "smart": smart_price,
             "floor": market_floor,
             "ceiling": market_ceiling,
-            "tribe": 0.6,     # numeric (safe)
-            "lift": 0.15,     # numeric (safe)
+            "tribe": 0.6,
+            "lift": 0.15,
         }
     )
 
@@ -143,7 +144,7 @@ def calculate_and_save_mit(product_id: int, db: Session = Depends(get_db)):
     }
 
 # ============================================================================
-# GET MIT — SAFE + FRONTEND-COMPATIBLE
+# GET MIT — SAFE
 # ============================================================================
 @router.get("/{product_id}/mit")
 def get_mit_price(product_id: int, db: Session = Depends(get_db)):

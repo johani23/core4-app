@@ -1,0 +1,49 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+from commitment.market_models import MarketLoopCommitment
+from commitment.market_brackets import MarketBracket
+from commitment.system_events import SystemEvent
+
+
+def evaluate_market_intention(db: Session, market_intention_id: int):
+
+    total_commitments = db.query(
+        func.coalesce(func.sum(MarketLoopCommitment.quantity), 0)
+    ).filter(
+        MarketLoopCommitment.market_intention_id == market_intention_id,
+        MarketLoopCommitment.is_active == True
+    ).scalar()
+
+    brackets = db.query(MarketBracket).filter(
+        MarketBracket.market_intention_id == market_intention_id,
+        MarketBracket.is_active == True
+    ).order_by(MarketBracket.rank.asc()).all()
+
+    events_emitted = []
+
+    for bracket in brackets:
+        if total_commitments >= bracket.required_commitments:
+
+            event = SystemEvent(
+                event_type="MARKET_BRACKET_UNLOCKED",
+                payload={
+                    "market_intention_id": market_intention_id,
+                    "bracket_id": bracket.id,
+                    "unlock_type": bracket.unlock_type,
+                    "required_commitments": bracket.required_commitments,
+                    "actual_commitments": total_commitments,
+                }
+            )
+
+            db.add(event)
+            events_emitted.append(event)
+
+    db.commit()
+
+    return {
+        "market_intention_id": market_intention_id,
+        "total_commitments": total_commitments,
+        "events_emitted": len(events_emitted),
+    }
+

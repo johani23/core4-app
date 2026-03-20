@@ -1,16 +1,26 @@
-fastapi==0.103.2
-uvicorn==0.23.2
-python-multipart==0.0.6
-pydantic==1.10.13
-jinja2==3.1.2
-aiofiles==23.1.0
+# --- Core API ---
+fastapi>=0.103,<1.0
+        # upgrade recommended (security + lifespan fixes)
+uvicorn==0.30.6
+python-multipart==0.0.9
 python-dotenv==1.0.0
-orjson==3.9.1
-SQLAlchemy==2.0.25
 
 
-numpy==1.26.4
-scikit-learn==1.4.2
-scipy==1.16.3
+# --- Templating / Files ---
+jinja2==3.1.4
+aiofiles==23.2.1
+
+# --- Data / ORM ---
+SQLAlchemy==2.0.32
+
+# --- Auth & Security (NEW) ---
+python-jose==3.3.0
+passlib[bcrypt]==1.7.4
+
+# --- Validation ---
+pydantic==2.8.2
+pydantic-settings==2.4.0
+
+# --- ML / Signal Processing (KEEP) ---
 joblib==1.5.3
 threadpoolctl==3.6.0

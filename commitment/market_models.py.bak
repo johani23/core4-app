@@ -1,0 +1,46 @@
+# commitment/market_models.py
+
+from datetime import datetime
+from sqlalchemy import (
+    Column, Integer, String, DateTime,
+    Boolean, Float, ForeignKey,
+    UniqueConstraint, Index
+)
+from sqlalchemy.orm import relationship
+from db import Base
+
+
+class MarketCommitment(Base):
+    __tablename__ = "market_commitments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    market_intention_id = Column(
+        Integer,
+        ForeignKey("market_intentions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    buyer_id = Column(String(64), index=True, nullable=False)
+
+    quantity = Column(Integer, default=1, nullable=False)
+
+    commitment_type = Column(String(16), default="SOFT", nullable=False)
+
+    weight = Column(Float, default=1.0, nullable=False)
+
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "market_intention_id",
+            "buyer_id",
+            name="uq_market_commitment_intention_buyer"
+        ),
+        Index("ix_market_commitment_active",
+              "market_intention_id",
+              "is_active"),
+    )

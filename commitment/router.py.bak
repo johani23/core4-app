@@ -1,0 +1,146 @@
+# commitment/router.py
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from db import get_db
+
+# =========================
+# RETAIL ENGINE IMPORTS
+# =========================
+
+from commitment.models import MerchantOffer, DiscountBracket
+from commitment.schemas import (
+    OfferCreate,
+    OfferOut,
+    CommitmentUpsert,
+    CommitmentOut,
+    EngineState,
+)
+
+from commitment.service import (
+    compute_engine_state,
+    upsert_commitment,
+    cancel_commitment,
+)
+
+# =========================
+# MARKET ENGINE IMPORTS
+# =========================
+
+from commitment.market_models import MarketCommitment
+from commitment.market_engine import evaluate_market_intention
+
+
+router = APIRouter(prefix="/api/commitment", tags=["commitment"])
+
+
+# ============================================================================
+# RETAIL ENGINE (OFFER-BASED COMMITMENT)
+# ============================================================================
+
+@router.post("/offers", response_model=OfferOut)
+def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
+    offer = MerchantOffer(
+        merchant_id=payload.merchant_id,
+        title=payload.title,
+        sku=payload.sku,
+        currency=payload.currency,
+        base_price=payload.base_price,
+        is_active=True,
+    )
+
+    db.add(offer)
+    db.commit()
+    db.refresh(offer)
+
+    # Create retail brackets
+    for b in payload.brackets:
+        bracket = DiscountBracket(
+            offer_id=offer.id,
+            name=b.name,
+            required_commitments=b.required_commitments,
+            discount_percent=b.discount_percent,
+            rank=b.rank,
+        )
+        db.add(bracket)
+
+    db.commit()
+    return offer
+
+
+@router.get("/offers/{offer_id}/state", response_model=EngineState)
+def get_offer_state(offer_id: int, mode: str = "COUNT", db: Session = Depends(get_db)):
+    try:
+        return compute_engine_state(db, offer_id, mode=mode)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+
+@router.post("/offers/{offer_id}/commit", response_model=CommitmentOut)
+def commit_to_offer(offer_id: int, payload: CommitmentUpsert, db: Session = Depends(get_db)):
+    try:
+        return upsert_commitment(
+            db=db,
+            offer_id=offer_id,
+            buyer_id=payload.buyer_id,
+            quantity=payload.quantity,
+            commitment_type=payload.commitment_type,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+
+@router.post("/offers/{offer_id}/cancel/{buyer_id}", response_model=CommitmentOut)
+def cancel_offer_commitment(offer_id: int, buyer_id: str, db: Session = Depends(get_db)):
+    try:
+        return cancel_commitment(db, offer_id, buyer_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+
+
+# ============================================================================
+# MARKET ENGINE (INTENTION-BASED COMMITMENT)
+# ============================================================================
+
+@router.post("/market/{market_intention_id}/commit")
+def create_market_commitment(
+    market_intention_id: int,
+    buyer_id: str,
+    quantity: int = 1,
+    commitment_type: str = "SOFT",
+    db: Session = Depends(get_db),
+):
+    """
+    Creates a MarketCommitment and triggers Market Engine evaluation.
+    """
+
+    commitment = MarketCommitment(
+        market_intention_id=market_intention_id,
+        buyer_id=buyer_id,
+        quantity=quantity,
+        commitment_type=commitment_type,
+    )
+
+    db.add(commitment)
+    db.commit()
+    db.refresh(commitment)
+
+    # 🔥 EVENT-DRIVEN TRIGGER
+    evaluate_market_intention(db, market_intention_id)
+
+    return {
+        "status": "market_commitment_created",
+        "market_intention_id": market_intention_id,
+        "buyer_id": buyer_id,
+    }
+
+
+@router.get("/market/{market_intention_id}/state")
+def get_market_state(market_intention_id: int, db: Session = Depends(get_db)):
+    """
+    Manually triggers evaluation and returns latest state.
+    """
+
+    result = evaluate_market_intention(db, market_intention_id)
+    return result

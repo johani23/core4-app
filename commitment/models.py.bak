@@ -1,0 +1,183 @@
+from datetime import datetime
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Boolean,
+    Float,
+    ForeignKey,
+    UniqueConstraint,
+    Index
+)
+
+from sqlalchemy.orm import relationship
+
+from db import Base
+
+
+# ============================================================
+# Merchant Offer
+# ============================================================
+
+class MerchantOffer(Base):
+    __tablename__ = "merchant_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    merchant_id = Column(String(64), index=True, nullable=False)
+
+    title = Column(String(200), nullable=False)
+
+    sku = Column(String(80), index=True, nullable=True)
+
+    currency = Column(String(8), default="SAR", nullable=False)
+
+    base_price = Column(Float, nullable=False)
+
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # ---------------------------------------------------------
+    # Relationships
+    # ---------------------------------------------------------
+
+    brackets = relationship(
+        "OfferDiscountBracket",
+        back_populates="offer",
+        cascade="all, delete-orphan"
+    )
+
+    commitments = relationship(
+        "MarketLoopCommitment",
+        back_populates="offer",
+        cascade="all, delete-orphan"
+    )
+
+    # ---------------------------------------------------------
+    # Indexes
+    # ---------------------------------------------------------
+
+    __table_args__ = (
+        Index("ix_offer_merchant_active", "merchant_id", "is_active"),
+    )
+
+
+# ============================================================
+# Discount Brackets
+# ============================================================
+
+class OfferDiscountBracket(Base):
+    __tablename__ = "offer_discount_brackets"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    offer_id = Column(
+        Integer,
+        ForeignKey("merchant_offers.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    name = Column(String(50), nullable=False)
+
+    required_commitments = Column(Integer, nullable=False)
+
+    discount_percent = Column(Float, nullable=False)
+
+    rank = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # relationship
+    offer = relationship(
+        "MerchantOffer",
+        back_populates="brackets"
+    )
+
+    # constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "offer_id",
+            "name",
+            name="uq_bracket_offer_name"
+        ),
+        Index(
+            "ix_bracket_offer_rank",
+            "offer_id",
+            "rank"
+        ),
+    )
+
+
+# ============================================================
+# Market Commitments (Buyer Participation)
+# ============================================================
+
+class MarketLoopCommitment(Base):
+    __tablename__ = "market_commitments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    offer_id = Column(
+        Integer,
+        ForeignKey("merchant_offers.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    buyer_id = Column(
+        String(64),
+        index=True,
+        nullable=False
+    )
+
+    quantity = Column(
+        Integer,
+        default=1,
+        nullable=False
+    )
+
+    commitment_type = Column(
+        String(16),
+        default="SOFT",
+        nullable=False
+    )
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+
+    weight = Column(
+        Float,
+        default=1.0,
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    # relationship
+    offer = relationship(
+        "MerchantOffer",
+        back_populates="commitments"
+    )
+
+    # constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "offer_id",
+            "buyer_id",
+            name="uq_commitment_offer_buyer"
+        ),
+        Index(
+            "ix_commit_offer_active",
+            "offer_id",
+            "is_active"
+        ),
+    )
