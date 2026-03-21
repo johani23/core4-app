@@ -1,6 +1,5 @@
 # ====================================================================
-# 🚀 Core4.AI – Growth Logger Service
-# Centralized event tracking for growth loop
+# 🚀 Core4.AI – Growth Logger Service (FIXED)
 # ====================================================================
 
 from sqlalchemy.orm import Session
@@ -16,7 +15,7 @@ def log_event(
     event = GrowthEvent(
         user_id=user_id,
         event_type=event_type,
-        metadata=metadata or {}
+        event_metadata=metadata or {}   # ✅ FIXED
     )
 
     db.add(event)

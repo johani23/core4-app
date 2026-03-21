@@ -1,6 +1,5 @@
 # ====================================================================
-# 🚀 Core4.AI – Growth Event Model
-# Tracks activation + growth loop signals
+# 🚀 Core4.AI – Growth Event Model (FIXED)
 # ====================================================================
 
 from sqlalchemy import Column, Integer, String, DateTime, JSON
@@ -21,7 +20,7 @@ class GrowthEvent(Base):
         index=True
     )
 
-    metadata = Column(
+    event_metadata = Column(   # ✅ FIXED NAME
         JSON,
         nullable=True
     )
