@@ -24,3 +24,5 @@ pydantic-settings==2.4.0
 # --- ML / Signal Processing (KEEP) ---
 joblib==1.5.3
 threadpoolctl==3.6.0
+
+numpy==1.26.4
