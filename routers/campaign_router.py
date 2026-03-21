@@ -1,10 +1,11 @@
 # ====================================================================
-# 💚 Core4.AI – Campaign Router (FINAL + FULL GROWTH LOOP)
+# 💚 Core4.AI – Campaign Router (PRODUCTION SAFE + OPTIMIZED)
 # ====================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 import re
 
 from db import get_db
@@ -25,7 +26,7 @@ from services.campaign_growth import (
     referral_stats
 )
 
-# 🚀 Growth
+# 🚀 Growth (ONLY for write operations)
 from services.growth_logger import log_event
 
 router = APIRouter(
@@ -42,43 +43,47 @@ def generate_slug(text: str):
 
 
 # ====================================================================
-# LIST CAMPAIGNS
+# LIST CAMPAIGNS (🔥 FIXED)
 # ====================================================================
 
 @router.get("/")
 def list_campaigns(db: Session = Depends(get_db)):
+
     campaigns = db.query(Campaign).order_by(
         Campaign.created_at.desc()
-    ).all()
+    ).limit(20).all()  # ✅ LIMIT
 
-    result = []
+    campaign_ids = [c.id for c in campaigns]
 
-    for c in campaigns:
-        buyers_joined = db.query(Commitment).filter(
-            Commitment.campaign_id == c.id
-        ).count()
+    buyers_map = {}
 
-        result.append({
+    if campaign_ids:
+        rows = db.query(
+            Commitment.campaign_id,
+            func.count(Commitment.id)
+        ).filter(
+            Commitment.campaign_id.in_(campaign_ids)
+        ).group_by(
+            Commitment.campaign_id
+        ).all()
+
+        buyers_map = {
+            campaign_id: count
+            for campaign_id, count in rows
+        }
+
+    return [
+        {
             "id": c.id,
             "slug": c.slug,
             "title": c.title,
             "current_price": c.current_price,
             "target_buyers": c.target_buyers,
-            "buyers": buyers_joined,
+            "buyers": buyers_map.get(c.id, 0),
             "status": c.status
-        })
-
-    # 🚀 Growth Event
-    log_event(
-        db=db,
-        event_type="campaign_list_viewed",
-        user_id=None,
-        metadata={
-            "count": len(campaigns)
         }
-    )
-
-    return result
+        for c in campaigns
+    ]
 
 
 # ====================================================================
@@ -117,7 +122,7 @@ def create_campaign(payload: dict, db: Session = Depends(get_db)):
 
 
 # ====================================================================
-# GET CAMPAIGN
+# GET CAMPAIGN (🔥 FIXED)
 # ====================================================================
 
 @router.get("/{campaign_id}")
@@ -130,15 +135,7 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # 🚀 Growth Event
-    log_event(
-        db=db,
-        event_type="campaign_viewed",
-        user_id=None,
-        metadata={
-            "campaign_id": campaign_id
-        }
-    )
+    # ❌ REMOVED log_event here (blocking)
 
     brackets = db.query(DiscountBracket).filter(
         DiscountBracket.campaign_id == campaign_id
@@ -146,33 +143,28 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
         DiscountBracket.required_commitments
     ).all()
 
-    buyers_joined = db.query(Commitment).filter(
+    buyers_joined = db.query(func.count(Commitment.id)).filter(
         Commitment.campaign_id == campaign_id
-    ).count()
+    ).scalar()
 
-    waiting_count = db.query(MarketRequest).filter(
+    waiting_count = db.query(func.count(MarketRequest.id)).filter(
         MarketRequest.campaign_id == campaign_id
-    ).count()
+    ).scalar()
 
     offers = db.query(MerchantOffer).filter(
         MerchantOffer.campaign_id == campaign_id,
         MerchantOffer.is_active == True
     ).all()
 
-    best_offer = None
-    if offers:
-        best_offer = min(offers, key=lambda o: o.current_price)
+    best_offer = min(offers, key=lambda o: o.current_price) if offers else None
 
     base_price = (
         min([o.base_price for o in offers])
-        if offers
-        else campaign.retail_price or campaign.current_price or 0
+        if offers else campaign.retail_price or campaign.current_price or 0
     )
 
     current_price = (
-        best_offer.current_price
-        if best_offer
-        else campaign.current_price
+        best_offer.current_price if best_offer else campaign.current_price
     )
 
     return {
@@ -211,7 +203,7 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 
 
 # ====================================================================
-# JOIN CAMPAIGN (🔥 GROWTH LOOP CORE)
+# JOIN CAMPAIGN (🔥 KEEP GROWTH HERE)
 # ====================================================================
 
 @router.post("/{campaign_id}/join")
@@ -256,7 +248,7 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
     db.commit()
     db.refresh(commitment)
 
-    # 🚀 Growth Event (JOIN)
+    # 🚀 SAFE: logging only on write
     log_event(
         db=db,
         event_type="campaign_joined",
@@ -267,18 +259,6 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
         }
     )
 
-    # 🚀 Referral Event (CRITICAL LOOP)
-    if payload.get("ref_code"):
-        log_event(
-            db=db,
-            event_type="referral_used",
-            user_id=None,
-            metadata={
-                "campaign_id": campaign_id,
-                "ref_code": payload.get("ref_code")
-            }
-        )
-
     buyers_joined = count_buyers_joined(db, campaign_id)
 
     offers = db.query(MerchantOffer).filter(
@@ -286,14 +266,10 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
         MerchantOffer.is_active == True
     ).all()
 
-    best_offer = None
-    if offers:
-        best_offer = min(offers, key=lambda o: o.current_price)
+    best_offer = min(offers, key=lambda o: o.current_price) if offers else None
 
     current_price = (
-        best_offer.current_price
-        if best_offer
-        else campaign.current_price
+        best_offer.current_price if best_offer else campaign.current_price
     )
 
     next_price, buyers_needed = get_next_unlock(
