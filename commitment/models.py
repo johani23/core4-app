@@ -1,5 +1,5 @@
 # ====================================================================
-# 💚 Core4.AI – Commitment Models (FINAL PRODUCTION READY)
+# 💚 Core4.AI – Commitment Models (FINAL HARDENED)
 # ====================================================================
 
 from datetime import datetime
@@ -22,7 +22,7 @@ class OfferDiscountBracket(Base):
 
     offer_id = Column(
         Integer,
-        ForeignKey("merchant_offers.id"),
+        ForeignKey("merchant_offers.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -35,7 +35,7 @@ class OfferDiscountBracket(Base):
 
     price = Column(Float, nullable=False)
 
-    rank = Column(Integer, default=0)
+    rank = Column(Integer, default=0, nullable=False)
 
     __table_args__ = (
         Index("ix_offer_bracket_offer_rank", "offer_id", "rank"),
@@ -54,12 +54,12 @@ class Commitment(Base):
 
     offer_id = Column(
         Integer,
-        ForeignKey("merchant_offers.id"),
+        ForeignKey("merchant_offers.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
 
-    buyer_id = Column(String(64), index=True, nullable=False)
+    buyer_id = Column(String(64), nullable=False, index=True)
 
     quantity = Column(Integer, default=1, nullable=False)
 
@@ -69,7 +69,7 @@ class Commitment(Base):
 
     is_active = Column(Boolean, default=True, nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -98,31 +98,77 @@ class MarketCommitment(Base):
         index=True
     )
 
-    email = Column(String(120), nullable=False, index=True)
+    email = Column(
+        String(120),
+        nullable=False,
+        index=True
+    )
 
-    commitment_price = Column(Float, nullable=False)
+    commitment_price = Column(
+        Float,
+        nullable=False
+    )
 
     first_name = Column(String(100), nullable=True)
 
     city = Column(String(100), nullable=True)
 
+    # =====================================================
     # 🔥 REFERRAL SYSTEM
-    referral_code = Column(String(20), unique=True, index=True)
-    referred_by = Column(String(20), nullable=True)
+    # =====================================================
+
+    referral_code = Column(
+        String(20),
+        nullable=False,
+        index=True
+    )
+
+    referred_by = Column(
+        String(20),
+        nullable=True,
+        index=True
+    )
+
+    # =====================================================
+    # STATUS
+    # =====================================================
 
     is_active = Column(Boolean, default=True, nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+        index=True   # ✅ important for recent joins queries
+    )
 
     __table_args__ = (
+
+        # 🔥 CRITICAL: prevent duplicate joins
         UniqueConstraint(
             "campaign_id",
             "email",
             name="uq_market_commitment_campaign_email"
         ),
+
+        # 🔥 referral code unique per campaign (NOT global)
+        UniqueConstraint(
+            "campaign_id",
+            "referral_code",
+            name="uq_campaign_referral_code"
+        ),
+
+        # ⚡ fast active lookups
         Index(
             "ix_market_commitment_active",
             "campaign_id",
             "is_active"
+        ),
+
+        # ⚡ referral analytics
+        Index(
+            "ix_market_commitment_referral",
+            "campaign_id",
+            "referred_by"
         ),
     )

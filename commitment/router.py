@@ -1,5 +1,5 @@
 # ====================================================================
-# 🚀 Core4.AI – Commitment Router (PRODUCTION SAFE)
+# 🚀 Core4.AI – Commitment Router (ROUTER OWNS COMMIT)
 # ====================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,11 +7,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 
-# Models
 from models.merchant_offer import MerchantOffer
 from models.discount_bracket import DiscountBracket
 
-# Schemas
 from commitment.schemas import (
     OfferCreate,
     OfferOut,
@@ -20,14 +18,12 @@ from commitment.schemas import (
     EngineState,
 )
 
-# Services
 from commitment.service import (
     compute_engine_state,
     upsert_commitment,
     cancel_commitment,
 )
 
-# Advanced (optional)
 from commitment.market_models import MarketLoopCommitment
 from commitment.market_engine import evaluate_market_intention
 
@@ -36,9 +32,8 @@ router = APIRouter(prefix="/api/commitment", tags=["commitment"])
 
 
 # ====================================================================
-# ✅ CREATE OR UPDATE OFFER
+# CREATE OR UPDATE OFFER
 # ====================================================================
-
 @router.post("/offers", response_model=OfferOut)
 def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
 
@@ -48,9 +43,6 @@ def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
     if not payload.title:
         raise HTTPException(status_code=400, detail="title is required")
 
-    # -------------------------------------------------
-    # Check existing offer
-    # -------------------------------------------------
     existing_offer = db.query(MerchantOffer).filter(
         MerchantOffer.campaign_id == payload.campaign_id,
         MerchantOffer.merchant_id == payload.merchant_id
@@ -64,10 +56,6 @@ def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
         existing_offer.current_price = payload.base_price
         existing_offer.is_active = True
 
-        db.commit()
-        db.refresh(existing_offer)
-
-        # 🔥 SAFE: Only update brackets IF they belong to THIS OFFER LOGIC
         if payload.brackets:
             db.query(DiscountBracket).filter(
                 DiscountBracket.campaign_id == payload.campaign_id
@@ -84,13 +72,10 @@ def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
                 )
                 db.add(bracket)
 
-            db.commit()
-
+        db.commit()
+        db.refresh(existing_offer)
         return existing_offer
 
-    # -------------------------------------------------
-    # Create new offer
-    # -------------------------------------------------
     offer = MerchantOffer(
         merchant_id=payload.merchant_id,
         campaign_id=payload.campaign_id,
@@ -103,12 +88,7 @@ def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
     )
 
     db.add(offer)
-    db.commit()
-    db.refresh(offer)
 
-    # -------------------------------------------------
-    # Create brackets (only if none exist)
-    # -------------------------------------------------
     existing_brackets = db.query(DiscountBracket).filter(
         DiscountBracket.campaign_id == payload.campaign_id
     ).count()
@@ -125,15 +105,14 @@ def create_offer(payload: OfferCreate, db: Session = Depends(get_db)):
             )
             db.add(bracket)
 
-        db.commit()
-
+    db.commit()
+    db.refresh(offer)
     return offer
 
 
 # ====================================================================
 # OFFER STATE
 # ====================================================================
-
 @router.get("/offers/{offer_id}/state", response_model=EngineState)
 def get_offer_state(
     offer_id: int,
@@ -146,15 +125,12 @@ def get_offer_state(
 # ====================================================================
 # COMMIT TO OFFER
 # ====================================================================
-
 @router.post("/offers/{offer_id}/commit", response_model=CommitmentOut)
 def commit_to_offer(
     offer_id: int,
     payload: CommitmentUpsert,
     db: Session = Depends(get_db),
 ):
-
-    # 🔥 Validate offer exists
     offer = db.query(MerchantOffer).filter(
         MerchantOffer.id == offer_id
     ).first()
@@ -162,14 +138,13 @@ def commit_to_offer(
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
-    # 🔥 Validate input
     if not payload.buyer_id:
         raise HTTPException(status_code=400, detail="buyer_id required")
 
     if payload.quantity <= 0:
         raise HTTPException(status_code=400, detail="quantity must be > 0")
 
-    return upsert_commitment(
+    result = upsert_commitment(
         db=db,
         offer_id=offer_id,
         buyer_id=payload.buyer_id,
@@ -177,24 +152,30 @@ def commit_to_offer(
         commitment_type=payload.commitment_type,
     )
 
+    db.commit()
+    db.refresh(result)
+
+    return result
+
 
 # ====================================================================
 # CANCEL COMMITMENT
 # ====================================================================
-
 @router.post("/offers/{offer_id}/cancel/{buyer_id}", response_model=CommitmentOut)
 def cancel_offer_commitment(
     offer_id: int,
     buyer_id: str,
     db: Session = Depends(get_db),
 ):
-    return cancel_commitment(db, offer_id, buyer_id)
+    result = cancel_commitment(db, offer_id, buyer_id)
+    db.commit()
+    db.refresh(result)
+    return result
 
 
 # ====================================================================
-# MARKET ENGINE (OPTIONAL)
+# MARKET ENGINE
 # ====================================================================
-
 @router.post("/market/{market_intention_id}/commit")
 def create_market_commitment(
     market_intention_id: int,
@@ -203,7 +184,6 @@ def create_market_commitment(
     commitment_type: str = "SOFT",
     db: Session = Depends(get_db),
 ):
-
     if not buyer_id:
         raise HTTPException(status_code=400, detail="buyer_id required")
 

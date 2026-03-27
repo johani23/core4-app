@@ -1,8 +1,8 @@
 # ====================================================================
-# 💚 Core4.AI – Discount Bracket Model (FINAL CLEAN)
+# 💚 Core4.AI – Discount Bracket Model (PRODUCTION CLEAN)
 # ====================================================================
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, String
+from sqlalchemy import Column, Integer, Float, ForeignKey
 from db import Base
 
 
@@ -13,7 +13,7 @@ class DiscountBracket(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # -------------------------------------------------
-    # Linked to Campaign (NOT offer)
+    # Link to Campaign (SOURCE OF TRUTH)
     # -------------------------------------------------
     campaign_id = Column(
         Integer,
@@ -23,12 +23,7 @@ class DiscountBracket(Base):
     )
 
     # -------------------------------------------------
-    # Display name
-    # -------------------------------------------------
-    name = Column(String(50), nullable=False)
-
-    # -------------------------------------------------
-    # Unlock condition
+    # Unlock condition (MANDATORY)
     # -------------------------------------------------
     required_commitments = Column(
         Integer,
@@ -36,15 +31,7 @@ class DiscountBracket(Base):
     )
 
     # -------------------------------------------------
-    # Discount %
-    # -------------------------------------------------
-    discount_percent = Column(
-        Float,
-        nullable=True
-    )
-
-    # -------------------------------------------------
-    # Final price
+    # Final price at this level (MANDATORY)
     # -------------------------------------------------
     price = Column(
         Float,
@@ -52,7 +39,7 @@ class DiscountBracket(Base):
     )
 
     # -------------------------------------------------
-    # Order
+    # Optional: ordering control (safe to keep)
     # -------------------------------------------------
     rank = Column(
         Integer,
