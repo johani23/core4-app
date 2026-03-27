@@ -1,12 +1,12 @@
 # ============================================================================
-# 💚 Core4.AI – Merchant Campaigns API (FINAL FIXED)
+# 💚 Core4.AI – Merchant Campaigns API (FINAL PRODUCTION READY)
 # ============================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models.campaign import Campaign
+
 from models.product import Product
 
 from pydantic import BaseModel
@@ -22,12 +22,12 @@ router = APIRouter(
 # ============================================================================
 # HELPERS
 # ============================================================================
-def generate_slug():
+def generate_slug() -> str:
     return str(uuid.uuid4())[:8]
 
 
 # ============================================================================
-# Pydantic Schema
+# SCHEMA
 # ============================================================================
 class CampaignCreate(BaseModel):
     product_id: Optional[int] = None
@@ -38,7 +38,7 @@ class CampaignCreate(BaseModel):
 
 
 # ============================================================================
-# GET all campaigns
+# GET ALL CAMPAIGNS
 # ============================================================================
 @router.get("/")
 def get_campaigns(db: Session = Depends(get_db)):
@@ -58,7 +58,7 @@ def get_campaigns(db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# GET single campaign
+# GET SINGLE CAMPAIGN
 # ============================================================================
 @router.get("/{campaign_id}")
 def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
@@ -86,11 +86,14 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# CREATE campaign (FINAL FIXED)
+# CREATE CAMPAIGN
 # ============================================================================
 @router.post("/")
 def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
 
+    # ------------------------------------------------------------
+    # VALIDATION
+    # ------------------------------------------------------------
     if not payload.product_id and not payload.intention_id:
         raise HTTPException(
             status_code=400,
@@ -104,17 +107,25 @@ def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
         if not product:
             raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
+    # ------------------------------------------------------------
+    # CREATE CAMPAIGN (SAFE)
+    # ------------------------------------------------------------
     try:
-        campaign = Campaign(
-            # REQUIRED fields
-            title=product.name if product else "Auto Campaign",
-            slug=generate_slug(),
+        # 🔥 GUARANTEED NON-NULL VALUES
+        title_value = product.name if product else "Auto Campaign"
+        slug_value = generate_slug()
 
+        campaign = Campaign(
+            # REQUIRED DB FIELDS
+            title=title_value,
+            slug=slug_value,
+
+            # MARKET FIELDS
             retail_price=product.price if product else 0,
             current_price=product.price if product else 0,
             target_buyers=100,
 
-            # decision
+            # DECISION LAYER
             product_id=payload.product_id,
             intention_id=payload.intention_id,
             channel=payload.channel,
@@ -135,4 +146,7 @@ def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
 
     except Exception as e:
         print("🔥 Campaign creation error:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Campaign creation failed"
+        )
