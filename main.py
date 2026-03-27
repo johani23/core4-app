@@ -92,25 +92,15 @@ def seed_initial_data():
 # ============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # -------------------------------------------------
-    # Verify DB connectivity on startup
-    # -------------------------------------------------
+
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
 
-    # -------------------------------------------------
-    # Dev-only seed
-    # NOTE:
-    # Table creation should be handled by migrations in production.
-    # Keep implicit create_all only for non-production environments.
-    # -------------------------------------------------
-    if not IS_PROD:
-        from db import Base
-        Base.metadata.create_all(bind=engine)
-        seed_initial_data()
+    # 🔥 ALWAYS create tables (TEMP PRODUCTION FIX)
+    from db import Base
+    Base.metadata.create_all(bind=engine)
 
     yield
-
 
 # ============================================================================
 # APP
