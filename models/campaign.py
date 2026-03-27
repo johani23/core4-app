@@ -1,12 +1,14 @@
 # ============================================================================
-# 💚 Core4.AI – Merchant Campaigns API (PRODUCTION SAFE FIXED)
+# 💚 Core4.AI – Merchant Campaigns API (FINAL FIXED)
 # ============================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from db import get_db
 from models.campaign import Campaign
 from models.product import Product
+
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -89,9 +91,6 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 @router.post("/")
 def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
 
-    # ------------------------------------------------------------
-    # Validate input
-    # ------------------------------------------------------------
     if not payload.product_id and not payload.intention_id:
         raise HTTPException(
             status_code=400,
@@ -105,21 +104,17 @@ def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
         if not product:
             raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
-    # ------------------------------------------------------------
-    # Create campaign (SAFE – satisfies DB constraints)
-    # ------------------------------------------------------------
     try:
         campaign = Campaign(
-            # REQUIRED DB fields
+            # REQUIRED fields
             title=product.name if product else "Auto Campaign",
             slug=generate_slug(),
 
-            # Optional market fields
             retail_price=product.price if product else 0,
             current_price=product.price if product else 0,
             target_buyers=100,
 
-            # Decision layer
+            # decision
             product_id=payload.product_id,
             intention_id=payload.intention_id,
             channel=payload.channel,
