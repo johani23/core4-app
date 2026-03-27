@@ -1,97 +1,143 @@
 # ============================================================================
-# 💚 Core4.AI – Campaign Model (PRODUCTION READY)
+# 💚 Core4.AI – Merchant Campaigns API (PRODUCTION SAFE FIXED)
 # ============================================================================
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, Index
-from sqlalchemy.sql import func
-from db import Base
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from db import get_db
+from models.campaign import Campaign
+from models.product import Product
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+import uuid
+
+router = APIRouter(
+    prefix="/api/merchant/campaigns",
+    tags=["merchant-campaigns"]
+)
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+def generate_slug():
+    return str(uuid.uuid4())[:8]
 
 
-class Campaign(Base):
-    __tablename__ = "campaigns"
+# ============================================================================
+# Pydantic Schema
+# ============================================================================
+class CampaignCreate(BaseModel):
+    product_id: Optional[int] = None
+    intention_id: Optional[int] = None
 
-    id = Column(Integer, primary_key=True, index=True)
+    channel: str
+    context_note: Optional[str] = None
 
-    # -------------------------------------------------
-    # Relations (soft-linked for MVP)
-    # -------------------------------------------------
-    product_id = Column(
-        Integer,
-        nullable=True
-    )
 
-    intention_id = Column(
-        Integer,
-        nullable=True
-    )
+# ============================================================================
+# GET all campaigns
+# ============================================================================
+@router.get("/")
+def get_campaigns(db: Session = Depends(get_db)):
+    campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
 
-    # -------------------------------------------------
-    # Campaign decision (MERCHANT-OWNED)
-    # -------------------------------------------------
-    channel = Column(
-        String(100),
-        nullable=False,
-        doc="Channel chosen by merchant (e.g. Influencer content, Ads, Organic)"
-    )
+    return [
+        {
+            "id": c.id,
+            "product_id": c.product_id,
+            "intention_id": c.intention_id,
+            "channel": c.channel,
+            "status": c.status,
+            "created_at": c.created_at,
+        }
+        for c in campaigns
+    ]
 
-    context_note = Column(
-        String(255),
-        nullable=True,
-        doc="Non-binding analytical context at time of decision"
-    )
 
-    # -------------------------------------------------
-    # Market Data (Needed for Referral Loop UI)
-    # -------------------------------------------------
+# ============================================================================
+# GET single campaign
+# ============================================================================
+@router.get("/{campaign_id}")
+def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
 
-    slug = Column(
-        String(120),
-        unique=True,
-        index=True,
-        nullable=False   # 🔥 FIXED
-    )
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
 
-    title = Column(
-        String(255),
-        nullable=False   # 🔥 FIXED
-    )
+    product = None
+    if campaign.product_id:
+        product = db.query(Product).filter(Product.id == campaign.product_id).first()
 
-    retail_price = Column(
-        Float,
-        nullable=True
-    )
+    return {
+        "id": campaign.id,
+        "status": campaign.status,
+        "created_at": campaign.created_at,
+        "channel": campaign.channel,
+        "context_note": campaign.context_note,
+        "product": product and {
+            "id": product.id,
+            "name": product.name,
+            "category": product.category,
+        },
+    }
 
-    current_price = Column(
-        Float,
-        nullable=True
-    )
 
-    target_buyers = Column(
-        Integer,
-        default=100,
-        nullable=False
-    )
+# ============================================================================
+# CREATE campaign (FINAL FIXED)
+# ============================================================================
+@router.post("/")
+def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
 
-    # -------------------------------------------------
-    # Status & audit
-    # -------------------------------------------------
+    # ------------------------------------------------------------
+    # Validate input
+    # ------------------------------------------------------------
+    if not payload.product_id and not payload.intention_id:
+        raise HTTPException(
+            status_code=400,
+            detail="يجب اختيار منتج أو نية سوق لإنشاء حملة"
+        )
 
-    status = Column(
-        String(50),
-        default="نشطة",
-        index=True   # 🔥 FIXED
-    )
+    product = None
 
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
-    )
+    if payload.product_id:
+        product = db.query(Product).filter(Product.id == payload.product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
-    # -------------------------------------------------
-    # Indexes (performance critical)
-    # -------------------------------------------------
-    __table_args__ = (
-        # ⚡ fast feed queries (active campaigns sorted by newest)
-        Index("ix_campaign_status_created", "status", "created_at"),
-    )
+    # ------------------------------------------------------------
+    # Create campaign (SAFE – satisfies DB constraints)
+    # ------------------------------------------------------------
+    try:
+        campaign = Campaign(
+            # REQUIRED DB fields
+            title=product.name if product else "Auto Campaign",
+            slug=generate_slug(),
+
+            # Optional market fields
+            retail_price=product.price if product else 0,
+            current_price=product.price if product else 0,
+            target_buyers=100,
+
+            # Decision layer
+            product_id=payload.product_id,
+            intention_id=payload.intention_id,
+            channel=payload.channel,
+            context_note=payload.context_note,
+
+            status="نشطة",
+            created_at=datetime.utcnow(),
+        )
+
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+
+        return {
+            "status": "created",
+            "id": campaign.id
+        }
+
+    except Exception as e:
+        print("🔥 Campaign creation error:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
