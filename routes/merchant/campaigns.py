@@ -1,6 +1,5 @@
 ﻿# ============================================================================
-# 💚 Core4.AI – Merchant Campaigns API (SAFE GOVERNANCE MODE)
-# Campaigns = Decision Log, NOT Pricing or Performance Engine
+# 💚 Core4.AI – Merchant Campaigns API (DEBUG VERSION)
 # ============================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +10,7 @@ from models.product import Product
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+import uuid
 
 router = APIRouter(
     prefix="/api/merchant/campaigns",
@@ -18,22 +18,17 @@ router = APIRouter(
 )
 
 # ============================================================================
-# Pydantic Schema (SAFE)
+# SCHEMA
 # ============================================================================
 class CampaignCreate(BaseModel):
-    # One of these must be provided
     product_id: Optional[int] = None
     intention_id: Optional[int] = None
-
-    # Channel decision (merchant-owned)
     channel: str
-
-    # Optional descriptive context (NON-BINDING)
     context_note: Optional[str] = None
 
 
 # ============================================================================
-# GET all campaigns (LIST)
+# GET ALL
 # ============================================================================
 @router.get("/")
 def get_campaigns(db: Session = Depends(get_db)):
@@ -53,11 +48,12 @@ def get_campaigns(db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# GET single campaign (SUMMARY)
+# GET ONE
 # ============================================================================
 @router.get("/{campaign_id}")
 def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -69,12 +65,8 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
         "id": campaign.id,
         "status": campaign.status,
         "created_at": campaign.created_at,
-
-        # Merchant decision
         "channel": campaign.channel,
         "context_note": campaign.context_note,
-
-        # Product context (NO pricing data)
         "product": product and {
             "id": product.id,
             "name": product.name,
@@ -84,35 +76,45 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# CREATE campaign (SAFE)
+# CREATE (DEBUG)
 # ============================================================================
 @router.post("/")
 def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
-    # ------------------------------------------------------------
-    # Validate intent
-    # ------------------------------------------------------------
+
+    print("🚀 DEBUG ROUTE HIT")   # 🔥 FIRST DEBUG
+
     if not payload.product_id and not payload.intention_id:
         raise HTTPException(
             status_code=400,
             detail="يجب اختيار منتج أو نية سوق لإنشاء حملة"
         )
 
-    # ------------------------------------------------------------
-    # Validate product if provided
-    # ------------------------------------------------------------
+    product = None
+
     if payload.product_id:
         product = db.query(Product).filter(Product.id == payload.product_id).first()
         if not product:
             raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
-    # ------------------------------------------------------------
-    # Create campaign (DECISION LOG)
-    # ------------------------------------------------------------
+    # 🔥 DEBUG VALUES
+    title_value = product.name if product else "Auto Campaign"
+    slug_value = str(uuid.uuid4())[:8]
+
+    print("🚀 SLUG:", slug_value, "TITLE:", title_value)   # 🔥 SECOND DEBUG
+
     campaign = Campaign(
         product_id=payload.product_id,
         intention_id=payload.intention_id,
         channel=payload.channel,
         context_note=payload.context_note,
+
+        title=title_value,
+        slug=slug_value,
+
+        retail_price=product.price if product else 0,
+        current_price=product.price if product else 0,
+        target_buyers=100,
+
         status="نشطة",
         created_at=datetime.utcnow(),
     )
