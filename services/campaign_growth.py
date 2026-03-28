@@ -1,5 +1,5 @@
 # ====================================================================
-# 💚 Core4.AI – Campaign Growth Service (FINAL CLEAN)
+# 💚 Core4.AI – Campaign Growth Service (FINAL PRODUCTION)
 # ====================================================================
 
 from datetime import datetime, timedelta
@@ -21,22 +21,84 @@ def count_buyers_joined(db: Session, campaign_id: int) -> int:
 
 
 # =====================================================
-# NEXT UNLOCK
+# 🧠 PRICING ENGINE (CORE)
 # =====================================================
 
-def get_next_unlock(db: Session, campaign_id: int, buyers_joined: int):
+def compute_pricing_state(db: Session, campaign_id: int, buyers_joined: int):
+    """
+    Returns full pricing state:
+    - current_price
+    - next_price
+    - buyers_needed
+    - brackets
+    """
+
     brackets = db.query(DiscountBracket).filter(
         DiscountBracket.campaign_id == campaign_id
     ).order_by(
         DiscountBracket.required_commitments.asc()
     ).all()
 
-    for bracket in brackets:
-        if buyers_joined < bracket.required_commitments:
-            buyers_needed = bracket.required_commitments - buyers_joined
-            return bracket.price, buyers_needed
+    # -------------------------------------------------
+    # No brackets → safe fallback
+    # -------------------------------------------------
+    if not brackets:
+        return {
+            "current_price": None,
+            "next_price": None,
+            "buyers_needed": 0,
+            "brackets": []
+        }
 
-    return None, 0
+    current_price = None
+    next_price = None
+    buyers_needed = 0
+    bracket_states = []
+
+    # -------------------------------------------------
+    # Determine unlocked + next bracket
+    # -------------------------------------------------
+    for bracket in brackets:
+
+        unlocked = buyers_joined >= bracket.required_commitments
+
+        if unlocked:
+            current_price = bracket.price
+
+        elif next_price is None:
+            next_price = bracket.price
+            buyers_needed = bracket.required_commitments - buyers_joined
+
+        bracket_states.append({
+            "required_commitments": bracket.required_commitments,
+            "price": bracket.price,
+            "unlocked": unlocked
+        })
+
+    # -------------------------------------------------
+    # Edge case: no unlock yet
+    # -------------------------------------------------
+    if current_price is None:
+        current_price = brackets[0].price
+
+    return {
+        "current_price": current_price,
+        "next_price": next_price,
+        "buyers_needed": buyers_needed,
+        "brackets": bracket_states
+    }
+
+
+# =====================================================
+# NEXT UNLOCK (LEGACY COMPAT)
+# =====================================================
+
+def get_next_unlock(db: Session, campaign_id: int, buyers_joined: int):
+    """
+    Backward compatibility for existing UI.
+    """
+    state = compute_pricing_state(db, campaign_id, buyers_joined)
+    return state["next_price"], state["buyers_needed"]
 
 
 # =====================================================

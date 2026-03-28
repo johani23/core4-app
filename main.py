@@ -127,7 +127,7 @@ app.add_middleware(RequestIDMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS if IS_PROD else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -184,6 +184,8 @@ from routers.merchant_router import router as merchant_router
 
 from commitment.router import router as commitment_router
 
+from routes import campaign
+
 
 # ============================================================================
 # ROUTE REGISTRATION
@@ -234,7 +236,7 @@ app.include_router(merchant_router)
 # -----------------------------------------
 app.include_router(gravity_router)
 app.include_router(commitment_router)
-app.include_router(campaign_router)
+
 app.include_router(market_loop_router)
 app.include_router(pricing_router)
 app.include_router(elasticity_router)

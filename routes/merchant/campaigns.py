@@ -1,21 +1,28 @@
 ﻿# ============================================================================
-# 💚 Core4.AI – Merchant Campaigns API (DEBUG VERSION)
+# 💚 Core4.AI – Merchant Campaigns API (FINAL CLEAN + AUTO LADDER)
 # ============================================================================
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from db import get_db
 from models.campaign import Campaign
 from models.product import Product
+
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 import uuid
 
+# 🔥 FIXED IMPORT
+from services.bracket_generator import generate_default_brackets
+
+
 router = APIRouter(
     prefix="/api/merchant/campaigns",
     tags=["merchant-campaigns"]
 )
+
 
 # ============================================================================
 # SCHEMA
@@ -76,12 +83,12 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# CREATE (DEBUG)
+# CREATE CAMPAIGN
 # ============================================================================
 @router.post("/")
 def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
 
-    print("🚀 DEBUG ROUTE HIT")   # 🔥 FIRST DEBUG
+    print("🚀 DEBUG ROUTE HIT")
 
     if not payload.product_id and not payload.intention_id:
         raise HTTPException(
@@ -96,11 +103,11 @@ def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
         if not product:
             raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
-    # 🔥 DEBUG VALUES
+    # -------------------------------------------------
+    # Campaign core data
+    # -------------------------------------------------
     title_value = product.name if product else "Auto Campaign"
     slug_value = str(uuid.uuid4())[:8]
-
-    print("🚀 SLUG:", slug_value, "TITLE:", title_value)   # 🔥 SECOND DEBUG
 
     campaign = Campaign(
         product_id=payload.product_id,
@@ -122,6 +129,21 @@ def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)):
     db.add(campaign)
     db.commit()
     db.refresh(campaign)
+
+    # -------------------------------------------------
+    # 🔥 AUTO CREATE PRICING LADDER (SAFE)
+    # -------------------------------------------------
+    try:
+        if campaign.retail_price and campaign.retail_price > 0:
+            generate_default_brackets(
+                db=db,
+                campaign_id=campaign.id,
+                base_price=campaign.retail_price,
+                category=product.category if product else None,
+            )
+    except Exception as e:
+        print("⚠️ Bracket generation failed:", str(e))
+        # Do NOT fail campaign creation
 
     return {
         "status": "created",
