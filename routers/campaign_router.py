@@ -45,18 +45,22 @@ def list_campaigns(db: Session = Depends(get_db)):
         buyers_joined = count_buyers_joined(db, c.id)
         pricing = compute_pricing_state(db, c.id, buyers_joined)
 
+        # ✅ SAFE FIX (outside dict)
+        buyers_needed = pricing.get("buyers_needed") or 0
+
+        "next_unlock_threshold": buyers_joined + buyers_needed,
+
         result.append({
             "id": c.id,
             "title": c.title,
             "retail_price": c.retail_price,
-            "current_price": pricing["current_price"],
+            "current_price": pricing.get("current_price"),
             "buyers_joined": buyers_joined,
             "final_target": c.target_buyers,
-            "next_unlock_threshold": buyers_joined + pricing["buyers_needed"],
+            "next_unlock_threshold": buyers_joined + buyers_needed,
         })
 
     return result
-
 
 # =========================================================
 # GET CAMPAIGN
