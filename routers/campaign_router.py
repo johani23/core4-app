@@ -31,6 +31,33 @@ def _get_campaign_or_404(db: Session, campaign_id: int):
     return campaign
 
 
+# =====================================================
+# LIST CAMPAIGNS (🔥 MUST COME FIRST)
+# =====================================================
+@router.get("/")
+def list_campaigns(db: Session = Depends(get_db)):
+
+    campaigns = db.query(Campaign).all()
+
+    result = []
+
+    for c in campaigns:
+        buyers_joined = count_buyers_joined(db, c.id)
+        pricing = compute_pricing_state(db, c.id, buyers_joined)
+
+        result.append({
+            "id": c.id,
+            "title": c.title,
+            "retail_price": c.retail_price,
+            "current_price": pricing["current_price"],
+            "buyers_joined": buyers_joined,
+            "final_target": c.target_buyers,
+            "next_unlock_threshold": buyers_joined + pricing["buyers_needed"],
+        })
+
+    return result
+
+
 # =========================================================
 # GET CAMPAIGN
 # =========================================================
@@ -59,7 +86,7 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db)):
 
 
 # =========================================================
-# JOIN CAMPAIGN (🔥 FIXED)
+# JOIN CAMPAIGN
 # =========================================================
 @router.post("/{campaign_id}/join")
 def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)):
@@ -80,7 +107,6 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="Already joined")
 
     buyers_joined = count_buyers_joined(db, campaign_id)
-
     pricing = compute_pricing_state(db, campaign_id, buyers_joined)
 
     ref_code = generate_referral_code(campaign_id, email)
@@ -119,7 +145,7 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-    # 🔥 MUST RETURN AFTER COMMIT
+    # 🔥 recompute AFTER commit
     buyers_joined = count_buyers_joined(db, campaign_id)
     pricing = compute_pricing_state(db, campaign_id, buyers_joined)
 
@@ -134,7 +160,7 @@ def join_campaign(campaign_id: int, payload: dict, db: Session = Depends(get_db)
 
 
 # =========================================================
-# RECENT JOINS (🔥 FIXED POSITION)
+# RECENT JOINS
 # =========================================================
 @router.get("/{campaign_id}/recent-joins")
 def get_recent_joins(campaign_id: int, db: Session = Depends(get_db)):
