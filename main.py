@@ -187,6 +187,8 @@ from commitment.router import router as commitment_router
 from routes import campaign
 
 
+
+
 # ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
@@ -230,6 +232,8 @@ app.include_router(dct_requirements_router, prefix="/api")
 
 app.include_router(market_router)
 app.include_router(merchant_router)
+
+app.include_router(campaign_router)
 
 # -----------------------------------------
 # Market engine / activation flow
