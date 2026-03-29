@@ -12,7 +12,7 @@ from models.campaign import Campaign
 
 def compute_pricing_state(db: Session, campaign_id: int, buyers_joined: int):
     """
-    🔥 Unified pricing logic for campaign page
+    🔥 Unified pricing logic (PRODUCTION SAFE)
     """
 
     campaign = db.query(Campaign).filter(
@@ -22,6 +22,8 @@ def compute_pricing_state(db: Session, campaign_id: int, buyers_joined: int):
     if not campaign:
         raise ValueError("Campaign not found")
 
+    retail_price = campaign.retail_price or 0
+
     brackets = (
         db.query(DiscountBracket)
         .filter(DiscountBracket.campaign_id == campaign_id)
@@ -29,33 +31,39 @@ def compute_pricing_state(db: Session, campaign_id: int, buyers_joined: int):
         .all()
     )
 
+    # =========================================================
+    # ✅ NO BRACKETS (SAFE FALLBACK)
+    # =========================================================
     if not brackets:
         return {
-            "current_price": campaign.current_price,
+            "current_price": retail_price,
             "brackets": [],
             "next_price": None,
-            "buyers_needed": None
+            "buyers_needed": 0   # 🔥 FIX (never None)
         }
 
-    current_price = campaign.current_price
+    current_price = retail_price
     next_price = None
-    buyers_needed = None
+    buyers_needed = 0
 
     formatted_brackets = []
 
     for b in brackets:
 
-        unlocked = buyers_joined >= b.required_commitments
+        required = b.required_commitments or 0
+        price = b.price or retail_price
+
+        unlocked = buyers_joined >= required
 
         if unlocked:
-            current_price = b.price
+            current_price = price
         elif next_price is None:
-            next_price = b.price
-            buyers_needed = b.required_commitments - buyers_joined
+            next_price = price
+            buyers_needed = max(required - buyers_joined, 0)
 
         formatted_brackets.append({
-            "required_commitments": b.required_commitments,
-            "price": b.price,
+            "required_commitments": required,
+            "price": price,
             "unlocked": unlocked
         })
 
@@ -63,5 +71,5 @@ def compute_pricing_state(db: Session, campaign_id: int, buyers_joined: int):
         "current_price": current_price,
         "brackets": formatted_brackets,
         "next_price": next_price,
-        "buyers_needed": buyers_needed
+        "buyers_needed": buyers_needed  # 🔥 ALWAYS INT
     }
