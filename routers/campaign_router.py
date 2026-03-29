@@ -53,7 +53,7 @@ def list_campaigns(db: Session = Depends(get_db)):
             "retail_price": c.retail_price,
             "current_price": pricing.get("current_price"),
             "buyers_joined": buyers_joined,
-            "final_target": c.target_buyers,
+            "final_target": c.target_buyers or 100,
          })
 
     return result# =========================================================
